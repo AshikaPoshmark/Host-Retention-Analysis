@@ -80,3 +80,31 @@ WHERE  show_host_activated_at IS NOT NULL
 AND Show_Month IS NOT NULL
 GROUP BY 1,2,3,4
 ORDER BY 1 DESC,2,3,4;
+
+----------------------------- Host Retention by Show Type across Seller Segments - Monthly -----------------------------------
+
+SELECT (TO_CHAR(DATE_TRUNC('month', show_host_activated_at ), 'YYYY-MM')) AS Show_Host_Activated_Month,
+       (TO_CHAR(DATE_TRUNC('month', start_at ), 'YYYY-MM')) AS Show_Month,
+       DATEDIFF(month,show_host_activated_at,dw_shows.start_at) + 1 AS months_since_show_host_activated,
+       CASE
+           WHEN show_host_activated_at = live_show_host_activated_at THEN 'live_show_activated_host'
+           WHEN show_host_activated_at = silent_show_host_activated_at THEN 'silent_show_activated_host'
+       END AS show_type,
+       coalesce(seller_segments_gmv_start.seller_segment_daily, '1. No Sales')  AS seller_segment,
+       count( distinct dw_users.user_id) as Host_count
+FROM analytics.dw_users_cs
+LEFT JOIN analytics.dw_users ON dw_users_cs.user_id = dw_users.user_id
+LEFT JOIN analytics.dw_shows ON dw_users_cs.user_id = dw_shows.creator_id
+LEFT JOIN analytics_scratch.l365d_seller_segment_gmv AS seller_segments_gmv_start
+                             ON dw_shows.creator_id = seller_segments_gmv_start.seller_id and
+                                (TO_CHAR(DATE_TRUNC('month', dw_shows.start_at ), 'YYYY-MM')) >
+                                (TO_CHAR(DATE_TRUNC('month', seller_segments_gmv_start.start_date ), 'YYYY-MM'))
+                                and  (TO_CHAR(DATE_TRUNC('month', dw_shows.start_at ), 'YYYY-MM')) <=
+                               (TO_CHAR(DATE_TRUNC('month', coalesce(seller_segments_gmv_start.end_date, GETDATE()) ), 'YYYY-MM'))
+WHERE  show_host_activated_at IS NOT NULL
+  AND dw_shows.origin_domain ='us'
+  AND (start_at < '2024-06-01' AND start_at >= '2022-10-01')
+  AND (show_host_activated_at < '2024-06-01' AND show_host_activated_at >= '2022-10-01')
+AND Show_Month IS NOT NULL
+GROUP BY 1,2,3,4,5
+ORDER BY 1 desc,2,3,4,5;
